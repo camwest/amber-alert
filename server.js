@@ -28,6 +28,7 @@ var sessionManager = new function() {
       id: Math.floor(Math.random()*99999999999).toString(),
       timestamp: new Date(),
       created_at: (new Date()).getTime(),
+      statuses: {},
       poke: function() {
         session.timestamp = new Date();
       },
@@ -38,8 +39,36 @@ var sessionManager = new function() {
         delete sessions[session.id];
       },
 
-      toPublic: function() {
-        return { id: this.id, username: this.username, created_at: this.created_at };
+      toPublic: function(user) {
+        // we need to know how the current user
+        // relates to the users specified
+        var status;
+        
+        if (user) {
+          sys.debug("Rendering a " + this.id + " to a public object for :" + user.id);
+          
+          // if there is a notification for user in the current          
+          // the status is pending
+          if (this.statuses[user.id] && this.statuses[user.id] == true) {
+            status = "pending";
+          } else if (user.statuses[this.id] && user.statuses[this.id] == true) {
+            status = "notified";
+          } else {
+            status = "normal";
+          }
+        } else {
+          status = "normal";
+        }
+        
+        sys.debug("NEW STATUS IS " + status);
+          
+        return { 
+          id: this.id, 
+          username: this.username, 
+          created_at: this.created_at,
+          bob: "DOB",
+          currentStatus: status
+        };
       }
     };
 
@@ -99,7 +128,7 @@ var sessionManager = new function() {
       callback({ currentUsers: matching });
     } else {
       callbackSubdomain = callbacksBySubdomain[subdomain];
-      callbackSubdomain.push({ timestamp: new Date(), callback: callback });
+      callbackSubdomain.push({ timestamp: new Date(), callback: callback, user: user });
     }
   };
   
@@ -110,6 +139,51 @@ var sessionManager = new function() {
       callbackSubdomain.shift().callback({ userRemoved: userId });
     }
   };
+  
+  this.toggleNotificationFor = function(targetUserId, currentUserId, subdomain) {
+    var subdomainSessions = subdomains[subdomain];
+    var targetUser = subdomainSessions[targetUserId];
+    var currentUser = subdomainSessions[currentUserId];
+    
+    if (currentUser.statuses[targetUserId] && currentUser.statuses[targetUserId] == true) {
+      currentUser.statuses[targetUserId] = false;
+    } else if (!targetUser.statuses.hasOwnProperty(currentUserId)) {
+      targetUser.statuses[currentUserId] = true;
+    } else if (targetUser.statuses[currentUserId] == false) {
+      targetUser.statuses[currentUserId] = true;
+    } else {
+      targetUser.statuses[currentUserId] = false;
+    }
+    
+    userStatusChange(targetUser, currentUser, subdomain);
+  };
+  
+  function userStatusChange(targetUser, currentUser, subdomain) {
+    //find the targetUser and notify them
+    callbackSubdomain = callbacksBySubdomain[subdomain];
+    
+    callbacksIndexesToRemove = [];
+    
+    for (var i = 0; i < callbackSubdomain.length; i++ ) {
+      var callback = callbackSubdomain[i];
+      
+      if (callback.user == targetUser) {
+        // remove the callback from the list of callbacks
+        callbacksIndexesToRemove.push(i);
+        callback.callback({ userStatusChange: currentUser.toPublic( targetUser ) });
+      }
+      
+      if (callback.user == currentUser) {
+        callback.callback({ userStatusChange: targetUser.toPublic( currentUser ) });
+        callbacksIndexesToRemove.push(i);
+      }
+    }
+    
+    for ( var i = 0; i < callbacksIndexesToRemove.length; i++ ) {
+      callbackSubdomain.splice(i, 1);       
+    }
+
+  }
   
   // clear old callbacks
   // they can hang around for at most 30 seconds.
@@ -182,4 +256,11 @@ fu.get("/data", function(req, res) {
     if (session) session.poke();
     res.simpleJSON(200, data);
   });
+});
+
+fu.get("/notify", function(req, res) {
+  var params = qs.parse(url.parse(req.url).query);
+
+  sessionManager.toggleNotificationFor(params.target_user, params.current_user, params.subdomain);  
+  res.simpleJSON(200, {});
 });

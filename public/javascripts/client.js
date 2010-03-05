@@ -1,7 +1,8 @@
 var CONFIG = {
   username: "",
   id: null,
-  last_message_time: 1
+  last_message_time: 1,
+  user_id_preix: 'user_'
 };
 
 function getSubdomain() {
@@ -71,6 +72,10 @@ function longPoll(data) {
     removeUser(data.userRemoved);
   }
   
+  if (data && data.userStatusChange) {
+    updateStatus(data.userStatusChange);
+  }
+  
   $.ajax({ 
     cache:false,
     type: "GET",
@@ -93,11 +98,15 @@ function addUser(user) {
 }
 
 function renderUser(user) {
-  $("#users").append("<li id='user_" + user.id + "'>" + user.username + "</li>");
+  $("#users").append("<li class='user' id='user_" + user.id + "'>" + user.username + "</li>");
 }
 
 function removeUser(userId) {
   $("#user_" + userId).remove();
+}
+
+function updateStatus(user) {
+  $("#user_" + user.id).removeClass().addClass("user " + user.currentStatus);
 }
 
 $(document).ready(function() {
@@ -130,9 +139,12 @@ $(document).ready(function() {
     return false;
   });
   
+  $('.user').live('click', function() {
+    var userId = this.id.substr(CONFIG.user_id_preix.length);
+    jQuery.get("/notify", { current_user: CONFIG.id, target_user: userId, subdomain: getSubdomain() }, function (data) { }, "json");
+  });
+  
   $("#logout").click(function(){
     logout();
   });
 });
-
-$(window).unload(logout);
