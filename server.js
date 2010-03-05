@@ -36,7 +36,7 @@ var sessionManager = new function() {
     
     //notify all the listening clients
     while (callbacks.length > 0) {
-      callbacks.shift().callback([session]);
+      callbacks.shift().callback({ userAdded: session });
     }
     
     return session;
@@ -53,7 +53,7 @@ var sessionManager = new function() {
     }
     
     if (matching.length != 0) {
-      callback(matching);
+      callback({ currentUsers: matching });
     } else {
       callbacks.push({ timestamp: new Date(), callback: callback });
     }
@@ -64,7 +64,7 @@ var sessionManager = new function() {
   setInterval(function () {
     var now = new Date();
     while (callbacks.length > 0 && now - callbacks[0].timestamp > 30*1000) {
-      callbacks.shift().callback([]); //zero users
+      callbacks.shift().callback({}); //zero users
     }
   }, 1000);
   
@@ -120,8 +120,8 @@ fu.get("/data", function(req, res) {
     session.poke();
   }
   
-  sessionManager.getUsers(session, params.since, function(users) {
+  sessionManager.getUsers(session, params.since, function(data) {
     if (session) session.poke();
-    res.simpleJSON(200, { users: users } );
+    res.simpleJSON(200, data);
   });
 });

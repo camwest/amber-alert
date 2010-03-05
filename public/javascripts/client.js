@@ -42,17 +42,15 @@ function setupDefaultScreens() {
 var users = [];
 
 function longPoll(data) {
-  if (data && data.users) {
-    for (var i = 0; i < data.users.length; i++) {
-      var user = data.users[i];
-
-      users.push(user);
-      renderUser(user);
-
-      // update the last user created_at time
-      if (user.created_at > CONFIG.last_message_time)
-        CONFIG.last_message_time = user.created_at;
+  if (data && data.currentUsers) {
+    for (var i = 0; i < data.currentUsers.length; i++) {
+      var user = data.currentUsers[i];
+      addUser(user);
     }
+  }
+  
+  if (data && data.userAdded) {
+    addUser(data.userAdded);
   }
   
   $.ajax({ 
@@ -65,6 +63,15 @@ function longPoll(data) {
       longPoll(data);
     }
   });
+}
+
+function addUser(user) {
+  users.push(user);
+  renderUser(user);
+
+  // update the last user created_at time
+  if (user.created_at > CONFIG.last_message_time)
+    CONFIG.last_message_time = user.created_at;
 }
 
 function renderUser(user) {
