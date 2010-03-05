@@ -11,9 +11,18 @@ var SESSION_TIMEOUT = 60 * 1000;
 // APPLICATION FUNCTIONS
 
 var sessionManager = new function() {
-  var callbacks = [];
+  var callbacksBySubdomain = {};
+  var subdomains = {};
   
   this.createSession = function(username, subdomain) {
+    
+    // if the subdomain doesn't exist create it
+    if (!subdomains.hasOwnProperty(subdomain)) {
+      subdomains[subdomain] = {};
+    } 
+
+    var subdomainSessions = subdomains[subdomain];
+    
     var session = {
       username: username,
       id: Math.floor(Math.random()*99999999999).toString(),
@@ -24,7 +33,8 @@ var sessionManager = new function() {
       },
 
       destroy: function() {
-        sessionManager.removeUser(this.id);
+        sessionManager.removeUser(this.id, subdomain);
+        delete subdomainSessions[session.id];
         delete sessions[session.id];
       },
 
@@ -33,36 +43,71 @@ var sessionManager = new function() {
       }
     };
 
+    //store into the global session object
     sessions[session.id] = session;
     
+    //store in the subdomain sessions array
+    subdomainSessions[session.id] = session;
+    
+    //if the callbackSubdomain doesn't exist, create it
+    if (!callbacksBySubdomain.hasOwnProperty(subdomain)) {
+      callbacksBySubdomain[subdomain] = [];
+    } 
+    
+    var callbackSubdomain = callbacksBySubdomain[subdomain];      
+
     //notify all the listening clients
-    while (callbacks.length > 0) {
-      callbacks.shift().callback({ userAdded: session });
+    while (callbackSubdomain.length > 0) {
+      callbackSubdomain.shift().callback({ userAdded: session });
     }
     
     return session;
   };
   
-  this.getUsers = function(user, since, callback) {
-    //get a list of users that has been created at since since    
-    var matching = [];
+  this.destroySession = function(sessionId, subdomain) {
+    var subdomainSessions = subdomains[subdomain];
+    var session = subdomainSessions[sessionId];
+    session.destroy();
     
-    for (var i in sessions) {
-      var session = sessions[i];
+    //clean up subdomain if the last user is logged out    
+    var count = 0;
+    for ( var session in subdomainSessions) {
+      count++;
+      
+    }
+    if (count == 0)
+      delete subdomains[subdomain];
+  };
+  
+  this.getSessionForUser = function(sessionId, subdomain) {
+    var subdomainSessions = subdomains[subdomain];
+    return subdomainSessions[sessionId];
+  };
+  
+  this.getUsers = function(user, subdomain, since, callback) {
+    //get a list of users that has been created at since since    
+    var matching = [];        
+    var subdomainSessions = subdomains[subdomain];    
+    
+    for (var i in subdomainSessions) {
+      var session = subdomainSessions[i];
       if (session.created_at > since && session.id != user.id)
         matching.push( session.toPublic() );
     }
-    
+
     if (matching.length != 0) {
       callback({ currentUsers: matching });
     } else {
-      callbacks.push({ timestamp: new Date(), callback: callback });
+      callbackSubdomain = callbacksBySubdomain[subdomain];
+      callbackSubdomain.push({ timestamp: new Date(), callback: callback });
     }
   };
   
-  this.removeUser = function(userId) {
-    while (callbacks.length > 0) {
-      callbacks.shift().callback({ userRemoved: userId });
+  this.removeUser = function(userId, subdomain) {
+    callbackSubdomain = callbacksBySubdomain[subdomain];
+    
+    while (callbackSubdomain.length > 0) {
+      callbackSubdomain.shift().callback({ userRemoved: userId });
     }
   };
   
@@ -70,9 +115,14 @@ var sessionManager = new function() {
   // they can hang around for at most 30 seconds.
   setInterval(function () {
     var now = new Date();
-    while (callbacks.length > 0 && now - callbacks[0].timestamp > 30*1000) {
-      callbacks.shift().callback({}); //zero users
+    
+    for ( var subdomain in callbacksBySubdomain ) {
+      var callbackSubdomain = callbacksBySubdomain[subdomain];      
+      while (callbackSubdomain.length > 0 && now - callbackSubdomain[0].timestamp > 30*1000) {
+        callbackSubdomain.shift().callback({}); //zero users
+      }
     }
+    
   }, 1000);
   
   // clear out old sessions
@@ -103,19 +153,14 @@ fu.get("/javascripts/jquery-1.4.2.min.js", fu.staticHandler("public/javascripts/
 
 fu.get("/login", function(req, res) {
   var params = qs.parse(url.parse(req.url).query);
-
   var session = sessionManager.createSession(params.username, params.subdomain);
   
   res.simpleJSON(200, { id: session.id, username: session.username });
 });
 
 fu.get("/logout", function(req, res) {
-  var id = qs.parse(url.parse(req.url).query).id;
-  var session;
-  if (id && sessions[id]) {
-    session = sessions[id];
-    session.destroy();
-  }
+  var params = qs.parse(url.parse(req.url).query);
+  sessionManager.destroySession(params.id, params.subdomain);
   res.simpleJSON(200, { });
 });
 
@@ -129,15 +174,11 @@ fu.get("/data", function(req, res) {
   if (!params.since) {
     res.simpleJSON(400, { error: "Must specify the since parameter"});
   }
+
+  var session = sessionManager.getSessionForUser(params.id, params.subdomain);
+  session.poke();
   
-  var session;
-  
-  if (sessions[params.id]) {
-    session = sessions[params.id];
-    session.poke();
-  }
-  
-  sessionManager.getUsers(session, params.since, function(data) {
+  sessionManager.getUsers(session, params.subdomain, params.since, function(data) {
     if (session) session.poke();
     res.simpleJSON(200, data);
   });

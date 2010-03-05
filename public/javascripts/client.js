@@ -27,7 +27,7 @@ function logout() {
   showLogin();  
   $("#users").empty();
   
-  jQuery.get("/logout", {id: CONFIG.id}, function (data) { }, "json");
+  jQuery.get("/logout", { id: CONFIG.id, subdomain: getSubdomain() }, function (data) { }, "json");
   CONFIG.username = "";
   CONFIG.id = null;
   CONFIG.last_message_time = 1;
@@ -76,7 +76,7 @@ function longPoll(data) {
     type: "GET",
     url: "/data",
     dataType: "json",
-    data: { since: CONFIG.last_message_time, id: CONFIG.id },
+    data: { since: CONFIG.last_message_time, id: CONFIG.id, subdomain: getSubdomain() },
     success: function(data, textStatus) {
       longPoll(data);
     }
