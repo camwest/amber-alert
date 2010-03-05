@@ -14,12 +14,23 @@ function loginListener(session) {
   
   loggedInAs(CONFIG.username);
   
+  
   longPoll();
 };
 
 function showLogin() {
   $('#login').show();
   $('#main').hide();
+}
+
+function logout() {
+  showLogin();  
+  $("#users").empty();
+  
+  jQuery.get("/logout", {id: CONFIG.id}, function (data) { }, "json");
+  CONFIG.username = "";
+  CONFIG.id = null;
+  CONFIG.last_message_time = 1;
 }
 
 function loggedInAs(username) {
@@ -42,6 +53,9 @@ function setupDefaultScreens() {
 var users = [];
 
 function longPoll(data) {
+  if (CONFIG.id == null)
+    return;
+    
   if (data && data.currentUsers) {
     for (var i = 0; i < data.currentUsers.length; i++) {
       var user = data.currentUsers[i];
@@ -51,6 +65,10 @@ function longPoll(data) {
   
   if (data && data.userAdded) {
     addUser(data.userAdded);
+  }
+  
+  if (data && data.userRemoved) {
+    removeUser(data.userRemoved);
   }
   
   $.ajax({ 
@@ -75,7 +93,11 @@ function addUser(user) {
 }
 
 function renderUser(user) {
-  $("#users").append("<li id='" + user.id + "'>" + user.username + "</li>");
+  $("#users").append("<li id='user_" + user.id + "'>" + user.username + "</li>");
+}
+
+function removeUser(userId) {
+  $("#user_" + userId).remove();
 }
 
 $(document).ready(function() {
@@ -108,4 +130,9 @@ $(document).ready(function() {
     return false;
   });
   
+  $("#logout").click(function(){
+    logout();
+  });
 });
+
+$(window).unload(logout);

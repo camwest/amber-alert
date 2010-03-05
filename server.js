@@ -24,6 +24,7 @@ var sessionManager = new function() {
       },
 
       destroy: function() {
+        sessionManager.removeUser(this.id);
         delete sessions[session.id];
       },
 
@@ -56,6 +57,12 @@ var sessionManager = new function() {
       callback({ currentUsers: matching });
     } else {
       callbacks.push({ timestamp: new Date(), callback: callback });
+    }
+  };
+  
+  this.removeUser = function(userId) {
+    while (callbacks.length > 0) {
+      callbacks.shift().callback({ userRemoved: userId });
     }
   };
   
@@ -102,10 +109,20 @@ fu.get("/login", function(req, res) {
   res.simpleJSON(200, { id: session.id, username: session.username });
 });
 
+fu.get("/logout", function(req, res) {
+  var id = qs.parse(url.parse(req.url).query).id;
+  var session;
+  if (id && sessions[id]) {
+    session = sessions[id];
+    session.destroy();
+  }
+  res.simpleJSON(200, { });
+});
+
 fu.get("/data", function(req, res) {
   var params = qs.parse(url.parse(req.url).query);
   
-  if (!params.id) {
+  if (!params.id || params.id == "null") {
     res.simpleJSON(400, { error: "Must be logged in"});
   }
   
