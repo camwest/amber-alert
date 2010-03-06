@@ -15,7 +15,6 @@ var sessionManager = new function() {
   var subdomains = {};
   
   this.createSession = function(username, subdomain) {
-    
     // if the subdomain doesn't exist create it
     if (!subdomains.hasOwnProperty(subdomain)) {
       subdomains[subdomain] = {};
@@ -35,9 +34,7 @@ var sessionManager = new function() {
 
       destroy: function() {
         sessionManager.removeUser(this.id, subdomain);
-        
-        sys.debug("Destroying session for " + this.username);
-        
+
         delete subdomainSessions[session.id];
         delete sessions[session.id];
       },
@@ -61,13 +58,10 @@ var sessionManager = new function() {
           status = "normal";
         }
         
-        sys.debug("NEW STATUS IS " + status);
-          
         return { 
           id: this.id, 
           username: this.username, 
           created_at: this.created_at,
-          bob: "DOB",
           currentStatus: status
         };
       }
@@ -149,9 +143,6 @@ var sessionManager = new function() {
     var targetUser = subdomainSessions[targetUserId];
     var currentUser = subdomainSessions[currentUserId];
     
-    sys.debug(targetUser.username + " was clicked on");
-    sys.debug(currentUser.username + " did the clicking");
-    
     if (currentUser.statuses[targetUserId] && currentUser.statuses[targetUserId] == true) {
       currentUser.statuses[targetUserId] = false;
     } else if (!targetUser.statuses.hasOwnProperty(currentUserId)) {
@@ -166,40 +157,32 @@ var sessionManager = new function() {
   };
   
   function userStatusChange(targetUser, currentUser, subdomain) {
-    //find the targetUser and notify them
-    callbackSubdomain = callbacksBySubdomain[subdomain];
     
-    callbacksIndexesToRemove = [];
+    //find the targetUser and notify them
+    callbackSubdomain = callbacksBySubdomain[subdomain];    
     
     var targetUserFound = false;
     var currentUserFound = false;
-    
-    for (var i = 0; i < callbackSubdomain.length; i++ ) {
-      var callback = callbackSubdomain[i];
-      
-      if (callback.user == targetUser) {
-        // remove the callback from the list of callbacks
-        sys.debug("Sending message to " + targetUser.username);
+    var savedCallbacks = [];
         
-        callbacksIndexesToRemove.push(i);
+    while (callbackSubdomain.length > 0) {
+      var callback = callbackSubdomain.shift();
+      
+      if (callback.user.id == targetUser.id) {
         callback.callback({ userStatusChange: currentUser.toPublic( targetUser ) });
-
         targetUserFound = true;
-      }
-      
-      if (callback.user == currentUser) {
-        sys.debug("Sending message to " + currentUser.username);
-        
+      } else if (callback.user.id == currentUser.id) {
         callback.callback({ userStatusChange: targetUser.toPublic( currentUser ) });
-        callbacksIndexesToRemove.push(i);
-
         currentUserFound = true;
+      } else {
+        // a match wasn't found, save the rest
+        savedCallbacks.push(callback);
       }
     }
-    
-    for ( var i = 0; i < callbacksIndexesToRemove.length; i++ ) {
-      callbackSubdomain.splice(i, 1);       
-    }
+
+    savedCallbacks.forEach(function(callback){
+      callbackSubdomain.push(callback);
+    });
     
     if (!currentUserFound) {
       throw new Error("Could not find current user session");
@@ -276,7 +259,7 @@ fu.get("/data", function(req, res) {
   }
 
   var session = sessionManager.getSessionForUser(params.id, params.subdomain);
-  session.poke();
+  session.poke();  
   
   sessionManager.getUsers(session, params.subdomain, params.since, function(data) {
     if (session) session.poke();

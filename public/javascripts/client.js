@@ -20,11 +20,11 @@ function loginListener(session) {
 function showLogin() {
   $('#login').show();
   $('#main').hide();
+  $("#users").empty();
 }
 
 function logout() {
   showLogin();  
-  $("#users").empty();
   
   jQuery.get("/logout", { id: CONFIG.id, subdomain: getSubdomain() }, function (data) { }, "json");
   CONFIG.username = "";
