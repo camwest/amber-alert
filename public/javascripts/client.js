@@ -24,8 +24,6 @@ function showLogin() {
 }
 
 function logout() {
-  showLogin();  
-  
   jQuery.get("/logout", { id: CONFIG.id, subdomain: getSubdomain() }, function (data) { }, "json");
   CONFIG.username = "";
   CONFIG.id = null;

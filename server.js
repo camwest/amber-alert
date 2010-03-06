@@ -133,8 +133,10 @@ var sessionManager = new function() {
       var callback = callbackSubdomain.shift();
       
       if (callback.user.id != userId) {
-        callbackSubdomain.shift().callback({ userRemoved: userId });        
-      }      
+        callback.callback({ userRemoved: userId });        
+      } else {
+        callback.callback(null);
+      }
     }
   };
   
