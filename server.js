@@ -35,6 +35,9 @@ var sessionManager = new function() {
 
       destroy: function() {
         sessionManager.removeUser(this.id, subdomain);
+        
+        sys.debug("Destroying session for " + this.username);
+        
         delete subdomainSessions[session.id];
         delete sessions[session.id];
       },
@@ -45,8 +48,6 @@ var sessionManager = new function() {
         var status;
         
         if (user) {
-          sys.debug("Rendering a " + this.id + " to a public object for :" + user.id);
-          
           // if there is a notification for user in the current          
           // the status is pending
           if (this.statuses[user.id] && this.statuses[user.id] == true) {
@@ -101,8 +102,7 @@ var sessionManager = new function() {
     //clean up subdomain if the last user is logged out    
     var count = 0;
     for ( var session in subdomainSessions) {
-      count++;
-      
+      count++;      
     }
     if (count == 0)
       delete subdomains[subdomain];
@@ -136,7 +136,11 @@ var sessionManager = new function() {
     callbackSubdomain = callbacksBySubdomain[subdomain];
     
     while (callbackSubdomain.length > 0) {
-      callbackSubdomain.shift().callback({ userRemoved: userId });
+      var callback = callbackSubdomain.shift();
+      
+      if (callback.user.id != userId) {
+        callbackSubdomain.shift().callback({ userRemoved: userId });        
+      }      
     }
   };
   
@@ -144,6 +148,9 @@ var sessionManager = new function() {
     var subdomainSessions = subdomains[subdomain];
     var targetUser = subdomainSessions[targetUserId];
     var currentUser = subdomainSessions[currentUserId];
+    
+    sys.debug(targetUser.username + " was clicked on");
+    sys.debug(currentUser.username + " did the clicking");
     
     if (currentUser.statuses[targetUserId] && currentUser.statuses[targetUserId] == true) {
       currentUser.statuses[targetUserId] = false;
@@ -164,23 +171,42 @@ var sessionManager = new function() {
     
     callbacksIndexesToRemove = [];
     
+    var targetUserFound = false;
+    var currentUserFound = false;
+    
     for (var i = 0; i < callbackSubdomain.length; i++ ) {
       var callback = callbackSubdomain[i];
       
       if (callback.user == targetUser) {
         // remove the callback from the list of callbacks
+        sys.debug("Sending message to " + targetUser.username);
+        
         callbacksIndexesToRemove.push(i);
         callback.callback({ userStatusChange: currentUser.toPublic( targetUser ) });
+
+        targetUserFound = true;
       }
       
       if (callback.user == currentUser) {
+        sys.debug("Sending message to " + currentUser.username);
+        
         callback.callback({ userStatusChange: targetUser.toPublic( currentUser ) });
         callbacksIndexesToRemove.push(i);
+
+        currentUserFound = true;
       }
     }
     
     for ( var i = 0; i < callbacksIndexesToRemove.length; i++ ) {
       callbackSubdomain.splice(i, 1);       
+    }
+    
+    if (!currentUserFound) {
+      throw new Error("Could not find current user session");
+    }
+    
+    if (!targetUserFound) {
+      throw new Error("Could not find target user session");
     }
 
   }

@@ -14,9 +14,7 @@ function loginListener(session) {
   CONFIG.id = session.id;
   
   loggedInAs(CONFIG.username);
-  
-  
-  longPoll();
+  longPoll("first");
 };
 
 function showLogin() {
@@ -52,11 +50,14 @@ function setupDefaultScreens() {
 */
 
 var users = [];
+var transmission_errors = 0;
 
 function longPoll(data) {
-  if (CONFIG.id == null)
+  if (data == null) {
+    showLogin();
     return;
-    
+  }
+  
   if (data && data.currentUsers) {
     for (var i = 0; i < data.currentUsers.length; i++) {
       var user = data.currentUsers[i];
